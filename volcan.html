@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laboratorio 3D: Volcán de Bicarbonato y Vinagre</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js Visual Engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            background-color: #030712;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            touch-action: none;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .explanation-modal {
+            transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), 
+                        opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                        backdrop-filter 0.8s ease;
+        }
+        .explanation-modal.hidden-modal {
+            opacity: 0;
+            pointer-events: none !important;
+            transform: scale(0.95) translateY(12px);
+        }
+        .explanation-modal.visible-modal {
+            opacity: 1;
+            pointer-events: auto !important;
+            transform: scale(1) translateY(0);
+        }
+
+        .minimized-btn {
+            transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), 
+                        opacity 0.4s ease,
+                        box-shadow 0.4s ease;
+        }
+        .minimized-btn.hidden-btn {
+            opacity: 0;
+            pointer-events: none !important;
+            transform: scale(0.8) translateY(-10px);
+        }
+        .minimized-btn.visible-btn {
+            opacity: 1;
+            pointer-events: auto !important;
+            transform: scale(1) translateY(0);
+        }
+    </style>
+</head>
+<body class="text-slate-100">
+
+    <div id="canvas-container"></div>
+
+    <!-- HUD Overlay -->
+    <div class="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 sm:p-6 z-10">
+        
+        <!-- Header & Telemetría -->
+        <div class="flex flex-wrap justify-between items-start gap-4">
+            <div class="glass-panel p-4 rounded-2xl pointer-events-auto max-w-xs shadow-2xl">
+                <div class="flex items-center gap-3">
+                    <div class="p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-red-400 shadow-lg shadow-red-500/20">
+                        <i class="fa-solid fa-volcano text-2xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-base sm:text-lg leading-tight text-white">Volcán Químico 3D</h1>
+                        <p class="text-xs text-slate-300">Bicarbonato + Vinagre</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Indicadores -->
+            <div class="glass-panel p-4 rounded-2xl pointer-events-auto flex items-center gap-4 sm:gap-6 shadow-2xl">
+                <div class="text-center">
+                    <p class="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase">Bicarbonato</p>
+                    <p id="bicarb-display" class="text-sm sm:text-base font-bold text-amber-400">0 <span class="text-xs text-slate-300">g</span></p>
+                </div>
+                <div class="h-8 w-px bg-slate-700"></div>
+                <div class="text-center">
+                    <p class="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase">Vinagre</p>
+                    <p id="vinegar-display" class="text-sm sm:text-base font-bold text-cyan-400">0 <span class="text-xs text-slate-300">ml</span></p>
+                </div>
+                <div class="h-8 w-px bg-slate-700"></div>
+                <div class="text-center">
+                    <p class="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase">Estado</p>
+                    <p id="status-display" class="text-xs font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-1 rounded-lg">Cráter Vacío</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel Inferior -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 pointer-events-none">
+            
+            <!-- Guía del Experimento -->
+            <div class="glass-panel rounded-2xl pointer-events-auto w-full sm:w-auto sm:max-w-xs shadow-2xl overflow-hidden transition-all duration-300">
+                <button id="btn-toggle-instructions" class="w-full p-4 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition">
+                    <span class="text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-graduation-cap"></i> Pasos Interactivos
+                    </span>
+                    <i id="icon-chevron" class="fa-solid fa-chevron-up text-xs text-slate-400 transition-transform duration-300"></i>
+                </button>
+                
+                <div id="instructions-content" class="px-4 pb-4 transition-all duration-300">
+                    <p class="text-xs font-mono text-slate-300 leading-relaxed">
+                        1. Arrastra el Frasco de Bicarbonato al cráter.<br>
+                        2. Arrastra la Jarra de Vinagre para verter el ácido.<br>
+                        3. Mira el flujo de lava líquida suave en las laderas.<br>
+                        4. ¡Siente la experiencia de una erupción masiva!
+                    </p>
+                </div>
+            </div>
+
+            <!-- Panel de Personalización y Reinicio -->
+            <div class="glass-panel p-4 sm:p-5 rounded-2xl pointer-events-auto w-full sm:w-80 shadow-2xl space-y-3">
+                <div class="flex gap-2 items-center justify-between">
+                    <span class="text-xs text-slate-300 font-semibold">Color de la Espuma:</span>
+                    <div class="flex gap-2">
+                        <button id="btn-color-red" class="w-6 h-6 rounded-full bg-red-600 border border-white/50 active:scale-95 shadow-md shadow-red-600/50" title="Rojo Intenso"></button>
+                        <button id="btn-color-orange" class="w-6 h-6 rounded-full bg-orange-500 border border-white/50 active:scale-95 shadow-md shadow-orange-500/50" title="Naranja Fuego"></button>
+                        <button id="btn-color-green" class="w-6 h-6 rounded-full bg-emerald-400 border border-white/50 active:scale-95 shadow-md shadow-emerald-400/50" title="Verde Neón"></button>
+                        <button id="btn-color-purple" class="w-6 h-6 rounded-full bg-purple-500 border border-white/50 active:scale-95 shadow-md shadow-purple-500/50" title="Púrpura Mágico"></button>
+                    </div>
+                </div>
+
+                <button id="btn-reset" class="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-2.5 rounded-xl text-xs transition active:scale-95 border border-slate-600 shadow-md">
+                    <i class="fa-solid fa-rotate-left text-xs"></i> Limpiar Cráter y Rellenar Botes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTÓN FLOTANTE CUANDO ESTÁ MINIMIZADO -->
+    <button id="btn-expand-minimized" class="minimized-btn hidden-btn fixed top-28 right-6 z-30 glass-panel p-3 px-5 rounded-2xl border border-red-500/50 text-red-300 hover:text-white hover:bg-red-500/20 shadow-2xl flex items-center gap-3 text-xs font-bold active:scale-95 cursor-pointer">
+        <i class="fa-solid fa-graduation-cap text-lg text-red-400"></i>
+        <span>Ver Explicación Científica</span>
+    </button>
+
+    <!-- MODAL DINÁMICO DE EXPLICACIÓN CIENTÍFICA -->
+    <div id="completion-modal" class="explanation-modal hidden-modal fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+        <div class="glass-panel w-full max-w-lg p-6 sm:p-8 rounded-3xl shadow-2xl border border-red-500/30 relative flex flex-col gap-5">
+            
+            <div class="flex items-start justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="p-3 rounded-2xl bg-gradient-to-br from-red-500/30 to-orange-600/30 border border-red-400/40 text-red-300">
+                        <i class="fa-solid fa-award text-3xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg sm:text-xl font-black text-white">¡Erupción Completada!</h2>
+                        <p class="text-xs text-red-400 font-medium">Reacción Ácido-Base e Neutralización</p>
+                    </div>
+                </div>
+                <button id="btn-minimize-modal" class="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition border border-slate-700 cursor-pointer">
+                    <i class="fa-solid fa-minus text-sm"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 bg-slate-900/70 p-4 rounded-2xl border border-slate-800 text-slate-300 text-xs sm:text-sm leading-relaxed max-h-64 overflow-y-auto">
+                <p class="font-bold text-red-300 text-sm flex items-center gap-2 border-b border-slate-800 pb-2">
+                    <i class="fa-solid fa-flask"></i> ¿Qué ocurrió durante la reacción química?
+                </p>
+
+                <div>
+                    <h4 class="font-semibold text-white text-xs uppercase tracking-wider text-red-400 mb-1">1. Unión del Ácido y la Base</h4>
+                    <p class="text-slate-300 text-xs">
+                        Al mezclar el bicarbonato de sodio con el vinagre (ácido acético), los componentes reaccionan inmediatamente rompiendo sus enlaces químicos.
+                    </p>
+                </div>
+
+                <div>
+                    <h4 class="font-semibold text-white text-xs uppercase tracking-wider text-red-400 mb-1">2. Producción Instantánea de Gas</h4>
+                    <p class="text-slate-300 text-xs">
+                        Esta combinación produce agua, acetato de sodio y una gran cantidad de gas dióxido de carbono. El gas busca salir con fuerza acumulando presión dentro del volcán.
+                    </p>
+                </div>
+
+                <div>
+                    <h4 class="font-semibold text-white text-xs uppercase tracking-wider text-red-400 mb-1">3. Expansión e Efervescencia</h4>
+                    <p class="text-slate-300 text-xs">
+                        Miles de burbujas atrapan el líquido formando una espesa espuma que desborda el cráter, haciendo que la lava descienda brillantemente por todas las laderas del volcán.
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3 pt-1">
+                <button id="btn-close-modal" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl text-xs transition shadow-lg flex items-center justify-center gap-2 border border-red-400/40 active:scale-95 cursor-pointer">
+                    <i class="fa-solid fa-check"></i> Comprendido
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, controls;
+        let bicarbGrams = 0, vinegarMl = 0;
+        let reactionIntensity = 0;
+        let currentLavaColor = 0xff2200;
+
+        let bicarbGroup, bicarbContentMesh, bicarbLevel = 1.0;
+        let vinegarGroup, vinegarContentMesh, vinegarLevel = 1.0;
+
+        let craterDepthMesh, craterLiquidMesh, magmaVeinsMesh;
+        let craterAccumulatedLevel = 0.25;
+        let craterLight, wallGlowLight;
+        let raycaster, mouse, dragPlane;
+        let draggedObject = null;
+        let isPouring = false;
+        let experimentCompleted = false;
+
+        const MAX_PARTICLES = 320;
+        let particlePool = [];
+        let sharedGeo;
+
+        const BICARB_INIT_POS = new THREE.Vector3(-4.2, 0.4, 1.8);
+        const VINEGAR_INIT_POS = new THREE.Vector3(4.2, 0.4, 1.8);
+
+        const COLOR_RED = new THREE.Color(0xff1100);
+        const COLOR_ORANGE = new THREE.Color(0xff5500);
+
+        function createTextureCanvas(text, bgColor, textColor) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, 512, 256);
+
+            ctx.fillStyle = textColor;
+            ctx.font = 'bold 52px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 256, 128);
+
+            ctx.strokeStyle = textColor;
+            ctx.lineWidth = 12;
+            ctx.strokeRect(20, 20, 472, 216);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createRockBumpTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#808080';
+            ctx.fillRect(0, 0, 256, 256);
+
+            for (let i = 0; i < 4000; i++) {
+                const val = Math.random() > 0.5 ? 255 : 0;
+                ctx.fillStyle = `rgb(${val},${val},${val})`;
+                ctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(4, 4);
+            return tex;
+        }
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x030712);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 6.2, 13);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            const OrbitControlsClass = THREE.OrbitControls || window.OrbitControls;
+            controls = new OrbitControlsClass(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 - 0.02;
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+
+            const sun = new THREE.DirectionalLight(0xffeedd, 1.2);
+            sun.position.set(8, 16, 8);
+            sun.castShadow = true;
+            scene.add(sun);
+
+            craterLight = new THREE.PointLight(currentLavaColor, 4.0, 14);
+            craterLight.position.set(0, 2.2, 0);
+            scene.add(craterLight);
+
+            wallGlowLight = new THREE.PointLight(currentLavaColor, 0.0, 10);
+            wallGlowLight.position.set(0, 0.2, 0);
+            scene.add(wallGlowLight);
+
+            const planeGeo = new THREE.PlaneGeometry(200, 200);
+            const planeMat = new THREE.MeshBasicMaterial({ visible: false });
+            dragPlane = new THREE.Mesh(planeGeo, planeMat);
+            dragPlane.rotation.x = -Math.PI / 2;
+            dragPlane.position.y = 1.0;
+            scene.add(dragPlane);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            buildRealisticVolcano();
+            buildInteractiveContainers();
+            initParticlePool();
+
+            setupPointerControls();
+            setupExplanationModalEvents();
+            setupColorButtons();
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+
+        function buildRealisticVolcano() {
+            const tableGeo = new THREE.CylinderGeometry(9.5, 9.5, 0.4, 48);
+            const tableMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5 });
+            const table = new THREE.Mesh(tableGeo, tableMat);
+            table.position.y = -1.8;
+            table.receiveShadow = true;
+            scene.add(table);
+
+            const bumpTex = createRockBumpTexture();
+            const volcanoGroup = new THREE.Group();
+
+            const outerGeo = new THREE.CylinderGeometry(1.6, 5.2, 3.8, 48, 24, true);
+            const posAttr = outerGeo.attributes.position;
+
+            for (let i = 0; i < posAttr.count; i++) {
+                const y = posAttr.getY(i);
+                const factor = (1.9 - y) / 3.8;
+                const noise = Math.sin(posAttr.getX(i) * 2.5) * 0.15 * factor;
+                posAttr.setX(i, posAttr.getX(i) + noise);
+                posAttr.setZ(i, posAttr.getZ(i) + noise);
+            }
+            outerGeo.computeVertexNormals();
+
+            const volcanoMat = new THREE.MeshStandardMaterial({
+                color: 0x374151,
+                bumpMap: bumpTex,
+                bumpScale: 0.08,
+                roughness: 0.85
+            });
+
+            const outerVolcano = new THREE.Mesh(outerGeo, volcanoMat);
+            outerVolcano.position.y = 0.1;
+            outerVolcano.castShadow = true;
+            outerVolcano.receiveShadow = true;
+            volcanoGroup.add(outerVolcano);
+
+            // Venas líquidas orgánicas en la pared (Grosor suavizado)
+            const veinsGeo = new THREE.CylinderGeometry(1.62, 5.24, 3.8, 64, 32, true);
+            const veinPos = veinsGeo.attributes.position;
+
+            for (let i = 0; i < veinPos.count; i++) {
+                const y = veinPos.getY(i);
+                const x = veinPos.getX(i);
+                const z = veinPos.getZ(i);
+                const angle = Math.atan2(z, x);
+
+                // Curvas líquidas continuas
+                const flowWave = Math.sin(y * 3.5 + angle * 4.0) * 0.08;
+                veinPos.setX(i, x + Math.cos(angle) * flowWave);
+                veinPos.setZ(i, z + Math.sin(angle) * flowWave);
+            }
+            veinsGeo.computeVertexNormals();
+
+            const veinsMat = new THREE.MeshStandardMaterial({
+                color: COLOR_RED,
+                emissive: COLOR_RED,
+                emissiveIntensity: 0.0,
+                transparent: true,
+                opacity: 0.85,
+                roughness: 0.1
+            });
+            magmaVeinsMesh = new THREE.Mesh(veinsGeo, veinsMat);
+            magmaVeinsMesh.position.y = 0.1;
+            volcanoGroup.add(magmaVeinsMesh);
+
+            const innerCraterGeo = new THREE.CylinderGeometry(1.58, 0.8, 1.8, 24, 6, true);
+            const innerCraterMat = new THREE.MeshStandardMaterial({
+                color: 0x111827,
+                roughness: 0.9,
+                side: THREE.BackSide
+            });
+            craterDepthMesh = new THREE.Mesh(innerCraterGeo, innerCraterMat);
+            craterDepthMesh.position.y = 1.1;
+            volcanoGroup.add(craterDepthMesh);
+
+            const liquidGeo = new THREE.CylinderGeometry(0.85, 0.85, 0.15, 24);
+            const liquidMat = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                emissive: currentLavaColor,
+                emissiveIntensity: 0.2,
+                transparent: true,
+                opacity: 0.9,
+                roughness: 0.2
+            });
+            craterLiquidMesh = new THREE.Mesh(liquidGeo, liquidMat);
+            craterLiquidMesh.position.y = craterAccumulatedLevel;
+            volcanoGroup.add(craterLiquidMesh);
+
+            const rimGeo = new THREE.TorusGeometry(1.6, 0.15, 12, 24);
+            const rimMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.8 });
+            const rimMesh = new THREE.Mesh(rimGeo, rimMat);
+            rimMesh.rotation.x = Math.PI / 2;
+            rimMesh.position.y = 2.0;
+            volcanoGroup.add(rimMesh);
+
+            scene.add(volcanoGroup);
+        }
+
+        function buildInteractiveContainers() {
+            bicarbGroup = new THREE.Group();
+            const jarGeo = new THREE.CylinderGeometry(0.5, 0.5, 1.2, 24);
+            const jarMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+            const jarBody = new THREE.Mesh(jarGeo, jarMat);
+
+            const labelTex = createTextureCanvas('BICARBONATO', '#f59e0b', '#ffffff');
+            const labelGeo = new THREE.CylinderGeometry(0.51, 0.51, 0.55, 24);
+            const labelMat = new THREE.MeshStandardMaterial({ map: labelTex, roughness: 0.4 });
+            const label = new THREE.Mesh(labelGeo, labelMat);
+
+            const lidGeo = new THREE.CylinderGeometry(0.53, 0.53, 0.18, 24);
+            const lidMat = new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.2 });
+            const lid = new THREE.Mesh(lidGeo, lidMat);
+            lid.position.y = 0.68;
+
+            const powderGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.9, 24);
+            const powderMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
+            bicarbContentMesh = new THREE.Mesh(powderGeo, powderMat);
+            bicarbContentMesh.position.y = -0.05;
+
+            bicarbGroup.add(jarBody, label, lid, bicarbContentMesh);
+            bicarbGroup.position.copy(BICARB_INIT_POS);
+            bicarbGroup.userData = { isDraggable: true, type: 'bicarb' };
+            scene.add(bicarbGroup);
+
+            vinegarGroup = new THREE.Group();
+            const glassMat = new THREE.MeshPhysicalMaterial({
+                color: 0x0284c7, transparent: true, opacity: 0.4, roughness: 0.1, transmission: 0.85
+            });
+            const flaskGeo = new THREE.CylinderGeometry(0.3, 0.6, 1.3, 24);
+            const flaskBody = new THREE.Mesh(flaskGeo, glassMat);
+
+            const labelVinTex = createTextureCanvas('VINAGRE', '#0284c7', '#ffffff');
+            const labelVinGeo = new THREE.CylinderGeometry(0.48, 0.58, 0.45, 24);
+            const labelVinMat = new THREE.MeshStandardMaterial({ map: labelVinTex, roughness: 0.4 });
+            const labelVin = new THREE.Mesh(labelVinGeo, labelVinMat);
+            labelVin.position.y = -0.1;
+
+            const capMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.3 });
+            const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.18, 24), capMat);
+            cap.position.y = 0.72;
+
+            const liquidGeo = new THREE.CylinderGeometry(0.26, 0.54, 0.95, 24);
+            const liquidMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.8, roughness: 0.2 });
+            vinegarContentMesh = new THREE.Mesh(liquidGeo, liquidMat);
+            vinegarContentMesh.position.y = -0.1;
+
+            vinegarGroup.add(flaskBody, labelVin, cap, vinegarContentMesh);
+            vinegarGroup.position.copy(VINEGAR_INIT_POS);
+            vinegarGroup.userData = { isDraggable: true, type: 'vinegar' };
+            scene.add(vinegarGroup);
+        }
+
+        function initParticlePool() {
+            sharedGeo = new THREE.SphereGeometry(0.26, 8, 8);
+
+            for (let i = 0; i < MAX_PARTICLES; i++) {
+                const mat = new THREE.MeshStandardMaterial({
+                    color: currentLavaColor,
+                    emissive: currentLavaColor,
+                    emissiveIntensity: 0.65,
+                    roughness: 0.15,
+                    transparent: true,
+                    opacity: 0.95
+                });
+                const mesh = new THREE.Mesh(sharedGeo, mat);
+                mesh.visible = false;
+                mesh.userData = { active: false, vx: 0, vy: 0, vz: 0, life: 0 };
+                scene.add(mesh);
+                particlePool.push(mesh);
+            }
+        }
+
+        function triggerEruption() {
+            if (bicarbGrams > 0 && vinegarMl > 0) {
+                reactionIntensity = Math.min(1.0, (bicarbGrams * vinegarMl) / 1200);
+
+                if (!experimentCompleted) {
+                    experimentCompleted = true;
+                    setTimeout(() => {
+                        showExplanationModal();
+                    }, 8000);
+                }
+            }
+        }
+
+        function spawnParticleFromPool() {
+            const p = particlePool.find(item => !item.userData.active);
+            if (!p) return;
+
+            const scale = 0.8 + Math.random() * 1.3;
+            p.scale.set(scale, scale, scale);
+
+            p.position.set(
+                (Math.random() - 0.5) * 1.1,
+                craterLiquidMesh.position.y + 0.1,
+                (Math.random() - 0.5) * 1.1
+            );
+
+            const angle = Math.atan2(p.position.z, p.position.x);
+            const speed = 0.045 + reactionIntensity * 0.12;
+
+            p.userData.active = true;
+            p.userData.vx = Math.cos(angle) * speed + (Math.random() - 0.5) * 0.03;
+            p.userData.vy = 0.16 + reactionIntensity * 0.28 + Math.random() * 0.06;
+            p.userData.vz = Math.sin(angle) * speed + (Math.random() - 0.5) * 0.03;
+            p.userData.life = 1.0;
+
+            p.material.color.setHex(currentLavaColor);
+            p.material.emissive.setHex(currentLavaColor);
+            p.visible = true;
+        }
+
+        function updateParticles() {
+            const time = Date.now() * 0.0012; // Modulación suave de tiempo
+
+            if (reactionIntensity > 0) {
+                const spawnRate = Math.min(20, Math.floor(reactionIntensity * 24) + 6);
+                for (let i = 0; i < spawnRate; i++) {
+                    spawnParticleFromPool();
+                }
+                reactionIntensity -= 0.0012;
+                if (reactionIntensity < 0) reactionIntensity = 0;
+
+                // Alternancia pausada y progresiva (Naranja <-> Rojo)
+                const pulse = (Math.sin(time) + 1.0) * 0.5;
+                const blendedColor = COLOR_RED.clone().lerp(COLOR_ORANGE, pulse);
+
+                magmaVeinsMesh.material.color.copy(blendedColor);
+                magmaVeinsMesh.material.emissive.copy(blendedColor);
+                magmaVeinsMesh.material.emissiveIntensity = Math.min(1.4, reactionIntensity * 2.2);
+
+                if (wallGlowLight) {
+                    wallGlowLight.color.copy(blendedColor);
+                    wallGlowLight.intensity = reactionIntensity * 4.5;
+                }
+            } else {
+                magmaVeinsMesh.material.emissiveIntensity = Math.max(0, magmaVeinsMesh.material.emissiveIntensity - 0.015);
+                if (wallGlowLight) wallGlowLight.intensity = Math.max(0, wallGlowLight.intensity - 0.04);
+            }
+
+            for (let i = 0; i < particlePool.length; i++) {
+                const p = particlePool[i];
+                if (!p.userData.active) continue;
+
+                p.position.x += p.userData.vx;
+                p.position.y += p.userData.vy;
+                p.position.z += p.userData.vz;
+
+                if (p.position.y > 1.9) {
+                    p.userData.vy -= 0.007;
+                } else {
+                    p.userData.vy -= 0.0035;
+                    p.userData.vx *= 1.025;
+                    p.userData.vz *= 1.025;
+                }
+
+                p.userData.life -= 0.008;
+                p.material.opacity = Math.max(0, p.userData.life);
+
+                if (p.userData.life <= 0 || p.position.y < -1.6) {
+                    p.userData.active = false;
+                    p.visible = false;
+                }
+            }
+        }
+
+        function animatePouring(targetGroup, contentMesh, contentType, onComplete) {
+            isPouring = true;
+            targetGroup.position.set(0, 3.2, 0);
+
+            let progress = 0;
+            const pourInterval = setInterval(() => {
+                progress += 0.05;
+                targetGroup.rotation.z = (Math.PI / 1.5) * Math.sin(progress * Math.PI);
+
+                if (contentType === 'bicarb') {
+                    bicarbLevel = Math.max(0.1, bicarbLevel - 0.04);
+                    contentMesh.scale.set(1, bicarbLevel, 1);
+                } else {
+                    vinegarLevel = Math.max(0.1, vinegarLevel - 0.04);
+                    contentMesh.scale.set(1, vinegarLevel, 1);
+                }
+
+                if (craterAccumulatedLevel < 1.45) {
+                    craterAccumulatedLevel += 0.025;
+                    craterLiquidMesh.position.y = craterAccumulatedLevel;
+                    craterLiquidMesh.material.color.setHex(contentType === 'bicarb' ? 0xffffff : currentLavaColor);
+                    craterLiquidMesh.material.emissive.setHex(currentLavaColor);
+                    craterLiquidMesh.material.emissiveIntensity = 0.6;
+                }
+
+                for (let k = 0; k < 3; k++) {
+                    const dropGeo = new THREE.SphereGeometry(0.07, 8, 8);
+                    const dropMat = new THREE.MeshStandardMaterial({
+                        color: contentType === 'bicarb' ? 0xffffff : 0x38bdf8,
+                        transparent: true,
+                        opacity: 0.95
+                    });
+                    const drop = new THREE.Mesh(dropGeo, dropMat);
+                    drop.position.set((Math.random() - 0.5) * 0.2, 2.8, (Math.random() - 0.5) * 0.2);
+                    scene.add(drop);
+
+                    const dropAnim = setInterval(() => {
+                        drop.position.y -= 0.15;
+                        if (drop.position.y <= craterLiquidMesh.position.y) {
+                            clearInterval(dropAnim);
+                            scene.remove(drop);
+                        }
+                    }, 20);
+                }
+
+                if (progress >= 1.0) {
+                    clearInterval(pourInterval);
+                    targetGroup.rotation.set(0, 0, 0);
+                    isPouring = false;
+                    onComplete();
+                }
+            }, 35);
+        }
+
+        function showExplanationModal() {
+            const modal = document.getElementById('completion-modal');
+            const minimizedBtn = document.getElementById('btn-expand-minimized');
+            modal.classList.remove('hidden-modal');
+            modal.classList.add('visible-modal');
+
+            minimizedBtn.classList.remove('visible-btn');
+            minimizedBtn.classList.add('hidden-btn');
+        }
+
+        function minimizeExplanationModal() {
+            const modal = document.getElementById('completion-modal');
+            const minimizedBtn = document.getElementById('btn-expand-minimized');
+            modal.classList.remove('visible-modal');
+            modal.classList.add('hidden-modal');
+
+            minimizedBtn.classList.remove('hidden-btn');
+            minimizedBtn.classList.add('visible-btn');
+        }
+
+        function setupExplanationModalEvents() {
+            document.getElementById('btn-minimize-modal').onclick = minimizeExplanationModal;
+            document.getElementById('btn-close-modal').onclick = minimizeExplanationModal;
+            document.getElementById('btn-expand-minimized').onclick = showExplanationModal;
+        }
+
+        function setupColorButtons() {
+            document.getElementById('btn-color-red').onclick = () => updateLavaColor(0xff1100);
+            document.getElementById('btn-color-orange').onclick = () => updateLavaColor(0xff6600);
+            document.getElementById('btn-color-green').onclick = () => updateLavaColor(0x10b981);
+            document.getElementById('btn-color-purple').onclick = () => updateLavaColor(0xa855f7);
+        }
+
+        function updateLavaColor(colorHex) {
+            currentLavaColor = colorHex;
+            craterLiquidMesh.material.emissive.setHex(colorHex);
+            if (craterLight) craterLight.color.setHex(colorHex);
+        }
+
+        function setupPointerControls() {
+            const canvas = renderer.domElement;
+
+            function updatePointer(e) {
+                const rect = canvas.getBoundingClientRect();
+                mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            }
+
+            canvas.addEventListener('pointerdown', (e) => {
+                if (isPouring) return;
+                updatePointer(e);
+                raycaster.setFromCamera(mouse, camera);
+
+                const draggables = [bicarbGroup, vinegarGroup];
+                const intersects = raycaster.intersectObjects(draggables.flatMap(g => g.children || g), true);
+
+                if (intersects.length > 0) {
+                    let obj = intersects[0].object;
+                    while (obj.parent && !obj.userData.isDraggable) {
+                        obj = obj.parent;
+                    }
+
+                    if (obj.userData.isDraggable) {
+                        draggedObject = obj;
+                        if (controls) controls.enabled = false;
+                    }
+                }
+            });
+
+            canvas.addEventListener('pointermove', (e) => {
+                if (!draggedObject || isPouring) return;
+                updatePointer(e);
+                raycaster.setFromCamera(mouse, camera);
+
+                const hits = raycaster.intersectObject(dragPlane);
+                if (hits.length > 0) {
+                    const pt = hits[0].point;
+                    const distToCenter = new THREE.Vector2(pt.x, pt.z).length();
+                    let targetY = Math.max(0.6, Math.min(4.5, pt.y + 0.5));
+
+                    if (distToCenter < 2.5) {
+                        targetY = Math.max(2.4, targetY);
+                    }
+
+                    draggedObject.position.set(
+                        Math.max(-5.5, Math.min(5.5, pt.x)),
+                        targetY,
+                        Math.max(-4, Math.min(4, pt.z))
+                    );
+
+                    if (distToCenter < 2.2 && draggedObject.position.y >= 2.0) {
+                        const activeObj = draggedObject;
+                        draggedObject = null;
+
+                        if (activeObj.userData.type === 'bicarb') {
+                            animatePouring(activeObj, bicarbContentMesh, 'bicarb', () => {
+                                activeObj.position.copy(BICARB_INIT_POS);
+                                bicarbGrams += 30;
+                                document.getElementById('bicarb-display').innerHTML = `${bicarbGrams} <span class="text-xs text-slate-300">g</span>`;
+                                if (controls) controls.enabled = true;
+                                triggerEruption();
+                                updateStatusUI();
+                            });
+                        } else if (activeObj.userData.type === 'vinegar') {
+                            animatePouring(activeObj, vinegarContentMesh, 'vinegar', () => {
+                                activeObj.position.copy(VINEGAR_INIT_POS);
+                                vinegarMl += 70;
+                                document.getElementById('vinegar-display').innerHTML = `${vinegarMl} <span class="text-xs text-slate-300">ml</span>`;
+                                if (controls) controls.enabled = true;
+                                triggerEruption();
+                                updateStatusUI();
+                            });
+                        }
+                    }
+                }
+            });
+
+            const release = () => {
+                if (draggedObject && !isPouring) {
+                    if (draggedObject.userData.type === 'bicarb') {
+                        draggedObject.position.copy(BICARB_INIT_POS);
+                    } else if (draggedObject.userData.type === 'vinegar') {
+                        draggedObject.position.copy(VINEGAR_INIT_POS);
+                    }
+                    draggedObject = null;
+                }
+                if (controls && !isPouring) {
+                    controls.enabled = true;
+                }
+            };
+
+            canvas.addEventListener('pointerup', release);
+            canvas.addEventListener('pointercancel', release);
+
+            document.getElementById('btn-reset').onclick = resetExperiment;
+
+            const btnInstructions = document.getElementById('btn-toggle-instructions');
+            const contentInstructions = document.getElementById('instructions-content');
+            const iconChevron = document.getElementById('icon-chevron');
+            let isInstructionsOpen = window.innerWidth >= 640;
+
+            if (!isInstructionsOpen) {
+                contentInstructions.style.display = 'none';
+                iconChevron.classList.add('rotate-180');
+            }
+
+            btnInstructions.onclick = () => {
+                isInstructionsOpen = !isInstructionsOpen;
+                contentInstructions.style.display = isInstructionsOpen ? 'block' : 'none';
+                iconChevron.classList.toggle('rotate-180', !isInstructionsOpen);
+            };
+        }
+
+        function updateStatusUI() {
+            const statusDisp = document.getElementById('status-display');
+            if (reactionIntensity > 0.05) {
+                statusDisp.innerText = '¡ERUPCIÓN EN PROCESO!';
+                statusDisp.className = 'text-xs font-bold text-red-300 bg-red-950/80 border border-red-500/50 px-2.5 py-1 rounded-lg animate-pulse';
+            } else if (bicarbGrams > 0 && vinegarMl === 0) {
+                statusDisp.innerText = 'Falta Vinagre';
+                statusDisp.className = 'text-xs font-bold text-amber-300 bg-amber-950/60 border border-amber-500/30 px-2.5 py-1 rounded-lg';
+            } else if (bicarbGrams === 0 && vinegarMl > 0) {
+                statusDisp.innerText = 'Falta Bicarbonato';
+                statusDisp.className = 'text-xs font-bold text-cyan-300 bg-cyan-950/60 border border-cyan-500/30 px-2.5 py-1 rounded-lg';
+            } else {
+                statusDisp.innerText = 'Cráter Vacío';
+                statusDisp.className = 'text-xs font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-1 rounded-lg';
+            }
+        }
+
+        function resetExperiment() {
+            bicarbGrams = 0;
+            vinegarMl = 0;
+            reactionIntensity = 0;
+            bicarbLevel = 1.0;
+            vinegarLevel = 1.0;
+            craterAccumulatedLevel = 0.25;
+            experimentCompleted = false;
+
+            bicarbContentMesh.scale.set(1, 1, 1);
+            vinegarContentMesh.scale.set(1, 1, 1);
+            craterLiquidMesh.position.y = craterAccumulatedLevel;
+            craterLiquidMesh.material.color.setHex(0xffffff);
+            magmaVeinsMesh.material.emissiveIntensity = 0.0;
+            if (wallGlowLight) wallGlowLight.intensity = 0;
+
+            document.getElementById('bicarb-display').innerHTML = `0 <span class="text-xs text-slate-300">g</span>`;
+            document.getElementById('vinegar-display').innerHTML = `0 <span class="text-xs text-slate-300">ml</span>`;
+            updateStatusUI();
+
+            minimizeExplanationModal();
+            document.getElementById('btn-expand-minimized').classList.remove('visible-btn');
+            document.getElementById('btn-expand-minimized').classList.add('hidden-btn');
+
+            bicarbGroup.position.copy(BICARB_INIT_POS); bicarbGroup.rotation.set(0, 0, 0);
+            vinegarGroup.position.copy(VINEGAR_INIT_POS); vinegarGroup.rotation.set(0, 0, 0);
+
+            for (let i = 0; i < particlePool.length; i++) {
+                particlePool[i].userData.active = false;
+                particlePool[i].visible = false;
+            }
+
+            if (controls) {
+                controls.enabled = true;
+                controls.target.set(0, 0, 0);
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (controls) controls.update();
+            updateParticles();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>

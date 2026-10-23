@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laboratorio 3D: Experimento Físico del Huevo Flotante</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js Visual Engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            background-color: #080d1a;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            touch-action: none;
+        }
+        #canvas-container canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+            cursor: grab;
+            outline: none;
+        }
+        body.dragging, body.dragging * {
+            cursor: grabbing !important;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        /* Transición ultra delicada y progresiva para el Modal */
+        .explanation-modal {
+            transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), 
+                        opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                        backdrop-filter 0.8s ease;
+        }
+        .explanation-modal.hidden-modal {
+            opacity: 0;
+            pointer-events: none !important;
+            transform: scale(0.95) translateY(12px);
+        }
+        .explanation-modal.visible-modal {
+            opacity: 1;
+            pointer-events: auto !important;
+            transform: scale(1) translateY(0);
+        }
+
+        /* Transición suave para el Botón Minimizado */
+        .minimized-btn {
+            transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), 
+                        opacity 0.4s ease,
+                        box-shadow 0.4s ease;
+        }
+        .minimized-btn.hidden-btn {
+            opacity: 0;
+            pointer-events: none !important;
+            transform: scale(0.8) translateY(-10px);
+        }
+        .minimized-btn.visible-btn {
+            opacity: 1;
+            pointer-events: auto !important;
+            transform: scale(1) translateY(0);
+        }
+    </style>
+</head>
+<body class="text-slate-100">
+
+    <div id="canvas-container"></div>
+
+    <!-- HUD Overlay -->
+    <div class="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 sm:p-6 z-10">
+        
+        <!-- Header -->
+        <div class="flex flex-wrap justify-between items-start gap-4">
+            <div class="glass-panel p-4 rounded-2xl pointer-events-auto max-w-xs sm:max-w-sm shadow-2xl">
+                <div class="flex items-center gap-3">
+                    <div class="p-3 bg-amber-500/20 border border-amber-500/40 rounded-xl text-amber-400">
+                        <i class="fa-solid fa-flask text-2xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-base sm:text-lg leading-tight text-white">Huevo Flotante 3D</h1>
+                        <p class="text-xs text-slate-300">Agua - Sal - Mezclar - Flotación</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Indicadores -->
+            <div class="glass-panel p-4 rounded-2xl pointer-events-auto flex items-center gap-3 sm:gap-5 shadow-2xl">
+                <div class="text-center">
+                    <p class="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase">Sal Agregada</p>
+                    <p id="salt-added-display" class="text-xs sm:text-sm font-bold text-indigo-400">0 g</p>
+                </div>
+                <div class="h-8 w-px bg-slate-700"></div>
+                <div class="text-center">
+                    <p class="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase">Mezcla (Cuchara)</p>
+                    <p id="dissolve-display" class="text-xs sm:text-sm font-bold text-amber-400">0% Disuelto</p>
+                </div>
+                <div class="h-8 w-px bg-slate-700"></div>
+                <div class="text-center">
+                    <p class="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase">Densidad Agua</p>
+                    <p id="water-density-display" class="text-xs sm:text-sm font-bold text-cyan-400">1000 kg/m³</p>
+                </div>
+                <div class="h-8 w-px bg-slate-700"></div>
+                <div class="text-center">
+                    <p class="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase">Estado Físico</p>
+                    <p id="status-display" class="text-xs font-bold text-amber-300 bg-amber-950/60 border border-amber-500/30 px-2.5 py-1 rounded-lg">Agua Dulce</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel de Controles e Instrucciones -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 pointer-events-none">
+            
+            <!-- Panel Desplegable de Instrucciones -->
+            <div class="glass-panel rounded-2xl pointer-events-auto w-full sm:w-auto sm:max-w-xs shadow-2xl overflow-hidden transition-all duration-300">
+                <button id="btn-toggle-instructions" class="w-full p-4 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition">
+                    <span class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-hand-pointer"></i> Paso a Paso
+                    </span>
+                    <i id="icon-chevron" class="fa-solid fa-chevron-up text-xs text-slate-400 transition-transform duration-300"></i>
+                </button>
+                
+                <div id="instructions-content" class="px-4 pb-4 transition-all duration-300">
+                    <p class="text-xs font-mono text-slate-300 leading-relaxed">
+                        1. Arrastra el huevo dentro del agua (se hundirá).<br>
+                        2. Agrega sal al vaso.<br>
+                        3. Agarra la cuchara para mezclar la sal.<br>
+                        4. ¡Observa el huevo flotar lentamente hacia la superficie!
+                    </p>
+                </div>
+            </div>
+
+            <!-- Panel de Botones de Control -->
+            <div class="glass-panel p-5 rounded-2xl pointer-events-auto w-full sm:w-80 shadow-2xl space-y-3">
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="btn-add-salt" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/30 active:scale-95 border border-indigo-400/30">
+                        <i class="fa-solid fa-plus text-xs"></i> + Echar Sal
+                    </button>
+                    <button id="btn-mix-spoon" class="bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-amber-600/30 active:scale-95 border border-amber-400/30">
+                        <i class="fa-solid fa-utensils text-xs"></i> Mezclar (Batir)
+                    </button>
+                </div>
+
+                <button id="btn-reset-water" class="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-2 rounded-xl text-xs transition active:scale-95 border border-slate-600">
+                    <i class="fa-solid fa-rotate-left text-xs"></i> Vaciar y Reiniciar Agua
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTÓN FLOTANTE CUANDO ESTÁ MINIMIZADO -->
+    <button id="btn-expand-minimized" class="minimized-btn hidden-btn fixed top-28 right-6 z-30 glass-panel p-3 px-5 rounded-2xl border border-amber-500/50 text-amber-300 hover:text-white hover:bg-amber-500/20 shadow-2xl flex items-center gap-3 text-xs font-bold active:scale-95 cursor-pointer">
+        <i class="fa-solid fa-graduation-cap text-lg text-amber-400"></i>
+        <span>Ver Explicación Científica</span>
+    </button>
+
+    <!-- MODAL DINÁMICO DE EXPLICACIÓN CIENTÍFICA -->
+    <div id="completion-modal" class="explanation-modal hidden-modal fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+        <div class="glass-panel w-full max-w-lg p-6 sm:p-8 rounded-3xl shadow-2xl border border-amber-500/30 relative flex flex-col gap-5">
+            
+            <!-- Encabezado del Modal -->
+            <div class="flex items-start justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="p-3 rounded-2xl bg-gradient-to-br from-amber-500/30 to-yellow-600/30 border border-amber-400/40 text-amber-300">
+                        <i class="fa-solid fa-award text-3xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg sm:text-xl font-black text-white">¡Experimento Logrado!</h2>
+                        <p class="text-xs text-amber-400 font-medium">Principio de Arquímedes y Densidad</p>
+                    </div>
+                </div>
+                <!-- Botón Minimizar -->
+                <button id="btn-minimize-modal" class="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition border border-slate-700 cursor-pointer">
+                    <i class="fa-solid fa-minus text-sm"></i>
+                </button>
+            </div>
+
+            <!-- Explicación Científica Detallada -->
+            <div class="space-y-4 bg-slate-900/70 p-4 rounded-2xl border border-slate-800 text-slate-300 text-xs sm:text-sm leading-relaxed max-h-64 overflow-y-auto">
+                
+                <p class="font-bold text-amber-300 text-sm flex items-center gap-2 border-b border-slate-800 pb-2">
+                    <i class="fa-solid fa-atom"></i> ¿Por qué flota el huevo al añadir sal?
+                </p>
+
+                <div>
+                    <h4 class="font-semibold text-white text-xs uppercase tracking-wider text-amber-400 mb-1">1. Densidad del Agua Dulce vs. Huevo</h4>
+                    <p class="text-slate-300 text-xs">
+                        Un huevo fresco posee una densidad aproximada de <b>1040 kg/m³</b>. Al colocarlo en agua dulce (<b>1000 kg/m³</b>), el huevo es más denso que el líquido desalojado, por lo que el peso supera la fuerza de empuje y se hunde hasta el fondo.
+                    </p>
+                </div>
+
+                <div>
+                    <h4 class="font-semibold text-white text-xs uppercase tracking-wider text-amber-400 mb-1">2. Incremento de Densidad por Soluto (Sal)</h4>
+                    <p class="text-slate-300 text-xs">
+                        Al disolver sal (cloruro de sodio) en el agua, aumentamos la masa por unidad de volumen del fluido sin incrementar significativamente su volumen total. Esto eleva la densidad del agua gradualmente hasta alcanzar unos <b>1070 kg/m³</b>.
+                    </p>
+                </div>
+
+                <div>
+                    <h4 class="font-semibold text-white text-xs uppercase tracking-wider text-amber-400 mb-1">3. Principio de Arquímedes y Empuje</h4>
+                    <p class="text-slate-300 text-xs">
+                        Según Arquímedes, todo cuerpo sumergido experimenta un empuje vertical hacia arriba igual al peso del fluido desalojado. Al ser el agua salada más densa, la fuerza de empuje ascensional supera el peso del huevo, forzándolo a flotar en la superficie.
+                    </p>
+                </div>
+
+            </div>
+
+            <!-- Botón Cerrar/Comprendido -->
+            <div class="flex items-center gap-3 pt-1">
+                <button id="btn-close-modal" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl text-xs transition shadow-lg flex items-center justify-center gap-2 border border-amber-400/40 active:scale-95 cursor-pointer">
+                    <i class="fa-solid fa-check"></i> Comprendido
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, controls;
+        let eggMesh, waterMesh, spoonGroup, saltUndissolvedMesh, spoonHitboxMesh;
+        let raycaster, mouse, dragPlane;
+
+        let isDraggingEgg = false;
+        let isDraggingSpoon = false;
+        let experimentCompleted = false;
+
+        const BEAKER_RADIUS = 2.2;
+        const BEAKER_HEIGHT = 6.4;
+        const WATER_HEIGHT = 5.2;
+        const WATER_SURFACE_Y = -3.1 + WATER_HEIGHT;
+        const WATER_BOTTOM_Y = -2.1;
+
+        let addedSaltGrams = 0;
+        let dissolvedPercent = 0;
+        let effectiveWaterDensity = 1000;
+
+        const TABLE_EGG_START_POS = { x: -4.5, y: -2.1, z: 0.6 };
+        const TABLE_SPOON_START_POS = { x: 4.2, y: -0.5, z: 0.6 };
+
+        let eggTargetY = TABLE_EGG_START_POS.y;
+        let eggCurrentY = TABLE_EGG_START_POS.y;
+
+        function initScene() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x080d1a);
+            scene.fog = new THREE.FogExp2(0x080d1a, 0.02);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 3.8, 13.5);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            const OrbitControlsClass = THREE.OrbitControls || window.OrbitControls;
+            controls = new OrbitControlsClass(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 + 0.02;
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+            const mainLight = new THREE.DirectionalLight(0xffffff, 1.3);
+            mainLight.position.set(8, 15, 8);
+            mainLight.castShadow = true;
+            scene.add(mainLight);
+
+            const dragPlaneGeo = new THREE.PlaneGeometry(300, 300);
+            const dragPlaneMat = new THREE.MeshBasicMaterial({ visible: false });
+            dragPlane = new THREE.Mesh(dragPlaneGeo, dragPlaneMat);
+            scene.add(dragPlane);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            setupExplanationModalEvents();
+        }
+
+        function build3DObjects() {
+            const tableGeo = new THREE.CylinderGeometry(15, 15, 0.4, 64);
+            const tableMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.35 });
+            const tableMesh = new THREE.Mesh(tableGeo, tableMat);
+            tableMesh.position.y = -3.3;
+            tableMesh.receiveShadow = true;
+            scene.add(tableMesh);
+
+            const beakerGroup = new THREE.Group();
+            const glassMat = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff, transparent: true, opacity: 0.28, roughness: 0.05, transmission: 0.92, ior: 1.5, side: THREE.DoubleSide
+            });
+            const beakerMesh = new THREE.Mesh(new THREE.CylinderGeometry(BEAKER_RADIUS, BEAKER_RADIUS, BEAKER_HEIGHT, 48, 1, true), glassMat);
+            beakerMesh.position.y = 0.1;
+            beakerGroup.add(beakerMesh);
+            scene.add(beakerGroup);
+
+            const waterGeo = new THREE.CylinderGeometry(BEAKER_RADIUS - 0.08, BEAKER_RADIUS - 0.08, WATER_HEIGHT, 48);
+            const waterMat = new THREE.MeshPhysicalMaterial({
+                color: 0x38bdf8, transparent: true, opacity: 0.5, roughness: 0.05, transmission: 0.8
+            });
+            waterMesh = new THREE.Mesh(waterGeo, waterMat);
+            waterMesh.position.set(0, -3.1 + WATER_HEIGHT / 2, 0);
+            scene.add(waterMesh);
+
+            const saltSedimentGeo = new THREE.CylinderGeometry(BEAKER_RADIUS - 0.15, BEAKER_RADIUS - 0.15, 0.2, 32);
+            const saltSedimentMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, transparent: true, opacity: 0.0 });
+            saltUndissolvedMesh = new THREE.Mesh(saltSedimentGeo, saltSedimentMat);
+            saltUndissolvedMesh.position.set(0, -2.9, 0);
+            scene.add(saltUndissolvedMesh);
+
+            spoonGroup = new THREE.Group();
+            const metalMat = new THREE.MeshStandardMaterial({
+                color: 0xe2e8f0,
+                metalness: 0.92,
+                roughness: 0.18
+            });
+
+            const handleGeo = new THREE.BoxGeometry(0.38, 3.6, 0.14);
+            const handleMesh = new THREE.Mesh(handleGeo, metalMat);
+            handleMesh.position.set(0, 1.8, 0);
+
+            const bowlGeo = new THREE.SphereGeometry(0.7, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.52);
+            bowlGeo.scale(0.85, 0.3, 1.25);
+            const bowlMesh = new THREE.Mesh(bowlGeo, metalMat);
+            bowlMesh.position.set(0, 0, 0.3);
+            bowlMesh.rotation.x = Math.PI;
+
+            const hitboxGeo = new THREE.CylinderGeometry(0.8, 0.8, 4.2, 16);
+            const hitboxMat = new THREE.MeshBasicMaterial({ visible: false });
+            spoonHitboxMesh = new THREE.Mesh(hitboxGeo, hitboxMat);
+            spoonHitboxMesh.position.set(0, 1.5, 0);
+
+            spoonGroup.add(handleMesh);
+            spoonGroup.add(bowlMesh);
+            spoonGroup.add(spoonHitboxMesh);
+            spoonGroup.position.set(TABLE_SPOON_START_POS.x, TABLE_SPOON_START_POS.y, TABLE_SPOON_START_POS.z);
+            spoonGroup.rotation.z = -Math.PI / 6;
+            scene.add(spoonGroup);
+
+            const eggGeo = new THREE.SphereGeometry(0.72, 32, 32);
+            eggGeo.scale(1.0, 1.35, 1.0);
+            const eggMat = new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.45 });
+            eggMesh = new THREE.Mesh(eggGeo, eggMat);
+            eggMesh.position.set(TABLE_EGG_START_POS.x, TABLE_EGG_START_POS.y, TABLE_EGG_START_POS.z);
+            eggMesh.castShadow = true;
+            scene.add(eggMesh);
+        }
+
+        function showExplanationModal() {
+            const modal = document.getElementById('completion-modal');
+            const minimizedBtn = document.getElementById('btn-expand-minimized');
+            modal.classList.remove('hidden-modal');
+            modal.classList.add('visible-modal');
+
+            minimizedBtn.classList.remove('visible-btn');
+            minimizedBtn.classList.add('hidden-btn');
+        }
+
+        function minimizeExplanationModal() {
+            const modal = document.getElementById('completion-modal');
+            const minimizedBtn = document.getElementById('btn-expand-minimized');
+            modal.classList.remove('visible-modal');
+            modal.classList.add('hidden-modal');
+
+            minimizedBtn.classList.remove('hidden-btn');
+            minimizedBtn.classList.add('visible-btn');
+        }
+
+        function setupExplanationModalEvents() {
+            document.getElementById('btn-minimize-modal').onclick = minimizeExplanationModal;
+            document.getElementById('btn-close-modal').onclick = minimizeExplanationModal;
+            document.getElementById('btn-expand-minimized').onclick = showExplanationModal;
+        }
+
+        function checkExperimentCompletion() {
+            if (experimentCompleted || isDraggingEgg) return;
+
+            const distFromCenter = Math.sqrt(eggMesh.position.x * eggMesh.position.x + eggMesh.position.z * eggMesh.position.z);
+            const insideBeaker = distFromCenter < BEAKER_RADIUS;
+
+            if (insideBeaker && effectiveWaterDensity >= 1055 && eggMesh.position.y >= 1.1) {
+                experimentCompleted = true;
+                setTimeout(() => {
+                    showExplanationModal();
+                }, 3500);
+            }
+        }
+
+        function updateEggPhysics() {
+            if (isDraggingEgg) return;
+
+            const activeSaltRatio = (addedSaltGrams / 80) * (dissolvedPercent / 100);
+            effectiveWaterDensity = 1000 + (activeSaltRatio * 200);
+
+            const distFromCenter = Math.sqrt(eggMesh.position.x * eggMesh.position.x + eggMesh.position.z * eggMesh.position.z);
+            const insideBeaker = distFromCenter < BEAKER_RADIUS;
+
+            if (insideBeaker) {
+                if (effectiveWaterDensity >= 1055) {
+                    eggTargetY = 1.3;
+                } else {
+                    eggTargetY = WATER_BOTTOM_Y;
+                }
+
+                eggCurrentY += (eggTargetY - eggCurrentY) * 0.015;
+                eggMesh.position.y = eggCurrentY;
+
+                if (effectiveWaterDensity >= 1055 && Math.abs(eggCurrentY - 1.3) < 0.1) {
+                    eggMesh.position.y = 1.3 + Math.sin(Date.now() * 0.0025) * 0.025;
+                }
+            } else {
+                if (eggMesh.position.y > WATER_BOTTOM_Y) {
+                    eggMesh.position.y += (WATER_BOTTOM_Y - eggMesh.position.y) * 0.05;
+                }
+                eggCurrentY = eggMesh.position.y;
+            }
+
+            checkExperimentCompletion();
+        }
+
+        function setupPointerControls() {
+            const canvas = renderer.domElement;
+
+            function updatePointer(e) {
+                const rect = canvas.getBoundingClientRect();
+                mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            }
+
+            canvas.addEventListener('pointerdown', (e) => {
+                updatePointer(e);
+                raycaster.setFromCamera(mouse, camera);
+
+                const eggHits = raycaster.intersectObject(eggMesh);
+                if (eggHits.length > 0) {
+                    isDraggingEgg = true;
+                    controls.enabled = false;
+                    dragPlane.position.copy(eggMesh.position);
+                    dragPlane.quaternion.copy(camera.quaternion);
+                    return;
+                }
+
+                const spoonHits = raycaster.intersectObjects(spoonGroup.children);
+                if (spoonHits.length > 0) {
+                    isDraggingSpoon = true;
+                    controls.enabled = false;
+                    dragPlane.position.copy(spoonGroup.position);
+                    dragPlane.quaternion.copy(camera.quaternion);
+                }
+            });
+
+            canvas.addEventListener('pointermove', (e) => {
+                if (!isDraggingEgg && !isDraggingSpoon) return;
+                updatePointer(e);
+                raycaster.setFromCamera(mouse, camera);
+
+                const hits = raycaster.intersectObject(dragPlane);
+                if (hits.length > 0) {
+                    const target = hits[0].point;
+
+                    if (isDraggingEgg) {
+                        eggMesh.position.set(
+                            Math.max(-5, Math.min(5, target.x)),
+                            Math.max(WATER_BOTTOM_Y, Math.min(3, target.y)),
+                            Math.max(-3, Math.min(3, target.z))
+                        );
+                        eggCurrentY = eggMesh.position.y;
+                    } else if (isDraggingSpoon) {
+                        spoonGroup.position.set(target.x, target.y, target.z);
+
+                        const distToWaterCenter = Math.sqrt(target.x * target.x + target.z * target.z);
+                        if (distToWaterCenter < BEAKER_RADIUS && target.y < WATER_SURFACE_Y && target.y > WATER_BOTTOM_Y) {
+                            if (addedSaltGrams > 0 && dissolvedPercent < 100) {
+                                dissolvedPercent = Math.min(100, dissolvedPercent + 3.0);
+                                updateUI();
+                            }
+                        }
+                    }
+                }
+            });
+
+            const release = () => {
+                isDraggingEgg = false;
+                isDraggingSpoon = false;
+                controls.enabled = true;
+            };
+
+            canvas.addEventListener('pointerup', release);
+            canvas.addEventListener('pointercancel', release);
+        }
+
+        function setupUIEvents() {
+            document.getElementById('btn-add-salt').onclick = () => {
+                addedSaltGrams = Math.min(80, addedSaltGrams + 20);
+                updateUI();
+            };
+
+            document.getElementById('btn-mix-spoon').onclick = () => {
+                if (addedSaltGrams > 0) {
+                    dissolvedPercent = Math.min(100, dissolvedPercent + 40);
+                    spoonGroup.position.set(0, 0.5, 0);
+                    setTimeout(() => spoonGroup.position.set(TABLE_SPOON_START_POS.x, TABLE_SPOON_START_POS.y, TABLE_SPOON_START_POS.z), 1200);
+                    updateUI();
+                }
+            };
+
+            document.getElementById('btn-reset-water').onclick = () => {
+                addedSaltGrams = 0;
+                dissolvedPercent = 0;
+                effectiveWaterDensity = 1000;
+                experimentCompleted = false;
+
+                minimizeExplanationModal();
+                document.getElementById('btn-expand-minimized').classList.remove('visible-btn');
+                document.getElementById('btn-expand-minimized').classList.add('hidden-btn');
+
+                eggCurrentY = TABLE_EGG_START_POS.y;
+                eggTargetY = TABLE_EGG_START_POS.y;
+                eggMesh.position.set(TABLE_EGG_START_POS.x, TABLE_EGG_START_POS.y, TABLE_EGG_START_POS.z);
+                updateUI();
+            };
+
+            const btnInstructions = document.getElementById('btn-toggle-instructions');
+            const contentInstructions = document.getElementById('instructions-content');
+            const iconChevron = document.getElementById('icon-chevron');
+            let isOpen = window.innerWidth >= 640;
+
+            if (!isOpen) {
+                contentInstructions.style.display = 'none';
+                iconChevron.classList.add('rotate-180');
+            }
+
+            btnInstructions.onclick = () => {
+                isOpen = !isOpen;
+                contentInstructions.style.display = isOpen ? 'block' : 'none';
+                iconChevron.classList.toggle('rotate-180', !isOpen);
+            };
+        }
+
+        function updateUI() {
+            document.getElementById('salt-added-display').innerText = `${addedSaltGrams} g`;
+            document.getElementById('dissolve-display').innerText = `${Math.round(dissolvedPercent)}% Disuelto`;
+            document.getElementById('water-density-display').innerText = `${Math.round(effectiveWaterDensity)} kg/m³`;
+
+            const undissolvedRatio = (addedSaltGrams / 80) * (1 - (dissolvedPercent / 100));
+            saltUndissolvedMesh.material.opacity = undissolvedRatio * 0.95;
+
+            const activeSaltRatio = (addedSaltGrams / 80) * (dissolvedPercent / 100);
+            waterMesh.material.opacity = 0.48 + activeSaltRatio * 0.25;
+
+            const statusDisp = document.getElementById('status-display');
+            if (effectiveWaterDensity >= 1055) {
+                statusDisp.innerText = '¡AGUA SALADA (HUEVO FLOTA!)';
+                statusDisp.className = 'text-xs font-bold text-emerald-300 bg-emerald-950/80 border border-emerald-500/50 px-2.5 py-1 rounded-lg animate-pulse';
+            } else if (addedSaltGrams > 0 && dissolvedPercent < 50) {
+                statusDisp.innerText = 'Sal en el Fondo (Falta Mezclar)';
+                statusDisp.className = 'text-xs font-bold text-amber-300 bg-amber-950/60 border border-amber-500/30 px-2.5 py-1 rounded-lg';
+            } else {
+                statusDisp.innerText = 'Agua Dulce (Huevo se Hunde)';
+                statusDisp.className = 'text-xs font-bold text-rose-300 bg-rose-950/60 border border-rose-500/30 px-2.5 py-1 rounded-lg';
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function renderLoop() {
+            requestAnimationFrame(renderLoop);
+            updateEggPhysics();
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = () => {
+            initScene();
+            build3DObjects();
+            setupPointerControls();
+            setupUIEvents();
+            renderLoop();
+        };
+    </script>
+</body>
+</html>
