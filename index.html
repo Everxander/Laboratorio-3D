@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laboratorio Virtual 3D</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-white min-h-screen p-6 sm:p-10 flex flex-col items-center justify-center font-sans">
+    
+    <div class="text-center mb-8 max-w-xl">
+        <div class="inline-block p-4 bg-indigo-500/20 border border-indigo-500/40 rounded-2xl mb-4 text-indigo-400">
+            <i class="fa-solid fa-flask-vial text-4xl"></i>
+        </div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight mb-2 text-white">Laboratorio Virtual 3D</h1>
+        <p class="text-slate-400 text-sm sm:text-base">Selecciona una simulación interactiva para iniciar:</p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-3xl">
+        <a href="volcan.html" class="p-4 bg-slate-800 hover:bg-slate-700/80 rounded-2xl border border-slate-700 transition flex items-center gap-4 group">
+            <div class="p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 group-hover:scale-105 transition"><i class="fa-solid fa-volcano text-xl"></i></div>
+            <div>
+                <h3 class="font-bold text-white text-sm">Volcán Químico</h3>
+                <p class="text-xs text-slate-400">Reacción de Efervescencia</p>
+            </div>
+        </a>
+
+        <a href="huevo.html" class="p-4 bg-slate-800 hover:bg-slate-700/80 rounded-2xl border border-slate-700 transition flex items-center gap-4 group">
+            <div class="p-3 bg-amber-500/20 border border-amber-500/30 rounded-xl text-amber-400 group-hover:scale-105 transition"><i class="fa-solid fa-egg text-xl"></i></div>
+            <div>
+                <h3 class="font-bold text-white text-sm">Huevo Flotante</h3>
+                <p class="text-xs text-slate-400">Densidad y Arquímedes</p>
+            </div>
+        </a>
+
+        <a href="arcoiris.html" class="p-4 bg-slate-800 hover:bg-slate-700/80 rounded-2xl border border-slate-700 transition flex items-center gap-4 group">
+            <div class="p-3 bg-purple-500/20 border border-purple-500/30 rounded-xl text-purple-400 group-hover:scale-105 transition"><i class="fa-solid fa-rainbow text-xl"></i></div>
+            <div>
+                <h3 class="font-bold text-white text-sm">Arcoíris</h3>
+                <p class="text-xs text-slate-400">Óptica e Iluminación</p>
+            </div>
+        </a>
+
+        <a href="cristalizacion.html" class="p-4 bg-slate-800 hover:bg-slate-700/80 rounded-2xl border border-slate-700 transition flex items-center gap-4 group">
+            <div class="p-3 bg-cyan-500/20 border border-cyan-500/30 rounded-xl text-cyan-400 group-hover:scale-105 transition"><i class="fa-solid fa-gem text-xl"></i></div>
+            <div>
+                <h3 class="font-bold text-white text-sm">Cristalización</h3>
+                <p class="text-xs text-slate-400">Estructuras Moleculares</p>
+            </div>
+        </a>
+
+        <a href="densidad.html" class="p-4 bg-slate-800 hover:bg-slate-700/80 rounded-2xl border border-slate-700 transition flex items-center gap-4 group">
+            <div class="p-3 bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-emerald-400 group-hover:scale-105 transition"><i class="fa-solid fa-vial text-xl"></i></div>
+            <div>
+                <h3 class="font-bold text-white text-sm">Densidad de Fluidos</h3>
+                <p class="text-xs text-slate-400">Mezcla de Líquidos</p>
+            </div>
+        </a>
+
+        <a href="globo.html" class="p-4 bg-slate-800 hover:bg-slate-700/80 rounded-2xl border border-slate-700 transition flex items-center gap-4 group">
+            <div class="p-3 bg-pink-500/20 border border-pink-500/30 rounded-xl text-pink-400 group-hover:scale-105 transition"><i class="fa-solid fa-balloon text-xl"></i></div>
+            <div>
+                <h3 class="font-bold text-white text-sm">Globo y Presión</h3>
+                <p class="text-xs text-slate-400">Termodinámica de Gases</p>
+            </div>
+        </a>
+
+        <a href="hielo.html" class="p-4 bg-slate-800 hover:bg-slate-700/80 rounded-2xl border border-slate-700 transition flex items-center gap-4 group">
+            <div class="p-3 bg-blue-500/20 border border-blue-500/30 rounded-xl text-blue-400 group-hover:scale-105 transition"><i class="fa-solid fa-cube text-xl"></i></div>
+            <div>
+                <h3 class="font-bold text-white text-sm">Hielo y Derretimiento</h3>
+                <p class="text-xs text-slate-400">Cambios de Estado</p>
+            </div>
+        </a>
+
+        <a href="iman.html" class="p-4 bg-slate-800 hover:bg-slate-700/80 rounded-2xl border border-slate-700 transition flex items-center gap-4 group">
+            <div class="p-3 bg-indigo-500/20 border border-indigo-500/30 rounded-xl text-indigo-400 group-hover:scale-105 transition"><i class="fa-solid fa-magnet text-xl"></i></div>
+            <div>
+                <h3 class="font-bold text-white text-sm">Campo Magnético</h3>
+                <p class="text-xs text-slate-400">Atracción e Imanes</p>
+            </div>
+        </a>
+
+        <a href="manzana.html" class="p-4 bg-slate-800 hover:bg-slate-700/80 rounded-2xl border border-slate-700 transition flex items-center gap-4 group">
+            <div class="p-3 bg-lime-500/20 border border-lime-500/30 rounded-xl text-lime-400 group-hover:scale-105 transition"><i class="fa-solid fa-apple-whole text-xl"></i></div>
+            <div>
+                <h3 class="font-bold text-white text-sm">Manzana y Oxidación</h3>
+                <p class="text-xs text-slate-400">Enzimática de la Fruta</p>
+            </div>
+        </a>
+
+        <a href="prisma.html" class="p-4 bg-slate-800 hover:bg-slate-700/80 rounded-2xl border border-slate-700 transition flex items-center gap-4 group">
+            <div class="p-3 bg-yellow-500/20 border border-yellow-500/30 rounded-xl text-yellow-400 group-hover:scale-105 transition"><i class="fa-solid fa-shapes text-xl"></i></div>
+            <div>
+                <h3 class="font-bold text-white text-sm">Prisma de Luz</h3>
+                <p class="text-xs text-slate-400">Refracción y Espectro</p>
+            </div>
+        </a>
+    </div>
+
+</body>
+</html>
